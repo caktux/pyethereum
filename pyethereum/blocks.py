@@ -40,8 +40,9 @@ class Block(object):
         self.gas_consumed = 0
         self.gaslimit = 1000000  # for now
 
-        # FIXME: block header sent by PoC4.3 nodes has no "number"
-        self.number = 0
+        
+        self.number = 0 # FIXME: block header sent by PoC4.3 nodes has no "number"
+
         self.prevhash = header[0]
         self.uncles_root = header[1]
         self.coinbase = header[2]
@@ -157,7 +158,8 @@ class Block(object):
     # constructor assuming no verification failures
     def serialize(self):
         txlist = [x.serialize() for x in self.transactions]
-        header = [encode_int(self.number),
+        header = [
+#                  encode_int(self.number), # FIXME see __init__
                   self.prevhash,
                   sha3(rlp.encode(self.uncles)),
                   self.coinbase.decode('hex'),
@@ -197,6 +199,12 @@ class Block(object):
 
     def hash(self):
         return sha3(self.serialize())
+
+    @classmethod
+    def genesis(cls,initial_alloc):
+        sys.stderr.write("Deprecated method. Use pyethereum.blocks.genesis"+
+                          "instead of pyethereum.blocks.Block.genesis\n")
+        return genesis(initial_alloc)
 
 
 def genesis(initial_alloc):
