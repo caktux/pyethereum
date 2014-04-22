@@ -1,7 +1,22 @@
 from sha3 import sha3_256
 from bitcoin import privtopub
 import struct
-import os, errno
+import os
+import sys
+import errno
+
+ethdirs = {
+    "linux2": "~/.pyethereum",
+    "darwin": "~/Library/Application Support/Pyethereum/",
+    "win32": "~/AppData/Roaming/Pyethereum",
+    "win64": "~/AppData/Roaming/Pyethereum",
+}
+
+prenormalized_ethdir = ethdirs.get(sys.platform, '~/.pyethereum').split('/')
+ETHEREUM_DIR = os.path.expanduser(os.path.join(*prenormalized_ethdir))
+if not os.path.exists(ETHEREUM_DIR) or not os.path.isdir(ETHEREUM_DIR):
+    os.makedirs(ETHEREUM_DIR)
+STATEDB_DIR = os.path.join(ETHEREUM_DIR, 'statedb')
 
 
 def sha3(seed):
@@ -132,11 +147,3 @@ def print_func_call(ignore_first_arg=False, max_call_number=100):
             return res
         return wrapper
     return inner
-
-def mkdir_p(path):
-    try:
-        os.makedirs(path)
-    except OSError as exc: # Python >2.5
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else: raise
