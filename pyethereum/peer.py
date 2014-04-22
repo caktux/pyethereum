@@ -58,7 +58,7 @@ class Peer(StoppableLoopThread):
         self._connection.close()
 
     def send_packet(self, response):
-        logger.debug('sending packet %r' % response)
+        logger.debug('sending packet %r' % repr(packeter.load_cmd(response)))
         self.response_queue.put(response)
 
     def _process_send(self):
