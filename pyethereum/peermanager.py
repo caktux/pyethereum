@@ -172,6 +172,12 @@ def peers_data_requested_handler(sender, request_data, **kwargs):
     signals.peers_data_ready.send(None, requester=sender, ready_data=peers)
 
 
+@receiver(signals.remote_chain_data_requested)
+def remote_chain_data_requested_handler(sender, parents=[], count=1, **kwargs):
+    for peer in peer_manager.connected_peers:
+        peer.send_GetChain(parents, count)
+
+
 @receiver(signals.disconnect_requested)
 def disconnect_requested_handler(sender, **kwargs):
     peer = sender
