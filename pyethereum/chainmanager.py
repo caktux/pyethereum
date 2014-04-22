@@ -1,9 +1,10 @@
 import logging
 import time
 from dispatch import receiver
-
+from blocks import Block
 from common import StoppableLoopThread
 from trie import rlp_hash, rlp_hash_hex
+import transactions
 import signals
 
 logger = logging.getLogger(__name__)
@@ -31,35 +32,48 @@ class ChainManager(StoppableLoopThread):
             return
         genesis_H = 'ab6b9a5613970faa771b12d449b2e9bb925ab7a369f'\
             '0a4b86b286e9d540099cf'.decode('hex')
-        self.out_proxy.send_get_chain(count=1, parents_H=[genesis_H])
+        signals.remote_chain_data_requested.send(
+            sender=self, parents=[genesis_H], count=100)
 
     def loop_body(self):
         self.mine()
-        time.sleep(.1)
+        self.bootstrap_blockchain()
+        time.sleep(10)
 
     def mine(self):
         "in the meanwhile mine a bit, not efficient though"
         pass
 
     def recv_blocks(self, blocks):
-        new_blocks_H = set()
-        # memorize
-        for block in blocks:
-            h = rlp_hash(block)
-            logger.debug("recv_blocks: %r" % rlp_hash_hex(block))
-            if h not in self.dummy_blockchain:
-                new_blocks_H.add(h)
-                self.dummy_blockchain[h] = block
-        # ask for children
-        for h in new_blocks_H:
-            logger.debug("recv_blocks: ask for child block %r" %
-                         h.encode('hex'))
-            #self.out_proxy.send_get_chain(1, [h])
-            signals.remote_chain_data_requested.send(
-                sender=self, parents=[h], count=1)
+
+        with self.lock:
+            ct = transactions.cast_transaction_args_from_rlp_decoded
+            ch = blocks.cast_block_header_from_rlp_decoded
+            blocks = [Block(ch(*header), [ct(*t) for t in transaction_list], uncles)
+                      for header, transaction_list, uncles in blocks]
+
+            # store block
+            for block in blocks:
+                h = block.hash()
+                if h not in self.dummy_blockchain:
+                    logger.debug("received new block: %s", h)
+                    self.dummy_blockchain[h] = block
+                else:
+                    logger.debug("received known block: %s", h)
+
+            # check for children
+            prev_hashes = set(
+                b.prevhash for b in self.dummy_blockchain.values())
+            for b in blocks:
+                if b.hash() not in prev_hashes:
+                    logger.debug("block w/o child: %s", b.hash())
+                    signals.remote_chain_data_requested.send(
+                        sender=self, parents=[h], count=1)
+
+            logger.debug('known blocks:%d', len(self.dummy_blockchain))
 
     def add_transactions(self, transactions):
-        logger.debug("add transactions %r" % transactions)
+        logger.debug("add transactions %r", transactions)
         for tx in tx_list:
             self.transactions.add(tx)
 
@@ -92,5 +106,5 @@ def blocks_data_requested_handler(sender, request_data, **kwargs):
 
 @receiver(signals.new_blocks_received)
 def new_blocks_received_handler(sender, blocks, **kwargs):
-    logger.debug("received blocks: %r" % ([rlp_hash_hex(b) for b in blocks]))
+    logger.debug("received blocks: %r", [rlp_hash_hex(b) for b in blocks])
     chain_manager.recv_blocks(blocks)
